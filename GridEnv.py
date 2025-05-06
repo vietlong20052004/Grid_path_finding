@@ -6,6 +6,8 @@ import gymnasium as gym
 from gymnasium import spaces
 from enum import Enum
 
+from matplotlib import pyplot as plt
+
 
 class Actions(Enum):
     RIGHT = 0

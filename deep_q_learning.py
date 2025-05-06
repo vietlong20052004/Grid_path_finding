@@ -10,8 +10,8 @@ from GridEnv import GridEnv
 from enum import Enum
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-TRAIN_MAPS = [f"map{i+3}.json" for i in range(4)]
-TEST_MAP = "map7.json"
+TRAIN_MAPS = [f"map2.json" ]
+TEST_MAP = "map2.json"
 
 class Actions(Enum):
     RIGHT = 0
@@ -89,7 +89,7 @@ class QLearning:
         self.target_net.eval()
 
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=self.learning_rate)
-        self.memory = ReplayMemory(capacity=10000)
+        self.memory = ReplayMemory(capacity=100)
 
         self.rewards_per_episode = []
         self.steps_per_episode = []
@@ -229,14 +229,14 @@ if __name__ == '__main__':
     agent = QLearning(env,
                       learning_rate=1e-3,
                       epsilon=1.0,
-                      min_epsilon=0.05,
+                      min_epsilon=0.1,
                       discount_rate=0.99,
                       training_episodes=300)
-    agent.train()
-    # save trained weights
-    torch.save(agent.policy_net.state_dict(), 'dqn_policy.pth')
+    # agent.train()
+    # # save trained weights
+    # torch.save(agent.policy_net.state_dict(), 'dqn_policy2.pth')
 
-    # later or now: load weights and evaluate
-    agent.policy_net.load_state_dict(torch.load('dqn_policy.pth', map_location=DEVICE))
+    # load weights and evaluate
+    agent.policy_net.load_state_dict(torch.load('dqn_policy2.pth', map_location=DEVICE))
     agent.evaluate(num_episodes=50)
     env.close()

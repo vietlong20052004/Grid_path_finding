@@ -2,11 +2,18 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
 import json
 import random
+import math
 from typing import Dict, Tuple, List, Optional
-
+from heapq import heappush, heappop
 
 class GridEnvironment:
     """Core class representing the grid environment with obstacles and rewards."""
+
+    ALPHA_OPT = 0.8
+    ALPHA_RAT = 0.1
+    ALPHA_EUQ = 1 - ALPHA_OPT - ALPHA_RAT
+    R_OBS = -4.0
+    R_TAR = 10.0
 
     def __init__(self, rows: int = 10, cols: int = 10):
         self.rows = rows
@@ -14,6 +21,8 @@ class GridEnvironment:
         self.start_pos = None
         self.goal_pos = None
         self.grid = None
+        self.base =  0
+        self.l0 = None
         self.reset_environment()
 
 
@@ -24,6 +33,7 @@ class GridEnvironment:
                      for _ in range(self.rows)]
         self.start_pos = (0, 0)
         self.goal_pos = (self.rows - 1, self.cols - 1)
+        self.l0 = self.astar_distance(self.start_pos, self.goal_pos)
 
     def toggle_obstacle(self, row: int, col: int) -> None:
         """Toggle obstacle status of a cell."""
@@ -39,16 +49,70 @@ class GridEnvironment:
         """Set the start position if the cell is not an obstacle."""
         if self.is_valid_position(row, col) and not self.grid[row][col]['obstacle']:
             self.start_pos = (row, col)
+            # self.l0 = self.astar_distance(self.start_pos, self.goal_pos)
 
     def set_goal(self, row: int, col: int) -> None:
         """Set the goal position if the cell is not an obstacle."""
         if self.is_valid_position(row, col) and not self.grid[row][col]['obstacle']:
             self.goal_pos = (row, col)
+            # self.l0 = self.astar_distance(self.start_pos, self.goal_pos)
 
 
     def is_valid_position(self, row: int, col: int) -> bool:
         """Check if position is within grid bounds."""
         return 0 <= row < self.rows and 0 <= col < self.cols
+
+    def astar_distance(self, start: Tuple[int, int], goal: Tuple[int,int]) -> float:
+        """
+        Return the shortest-path from start to goal using A*
+        min_heap = ( f, g, current)
+        g = cost from start to current
+        h = manhattan distance abs(dx) + abs(dy)
+        f = g + h
+        """
+
+        min_heap = [(0 + abs(start[0] - goal[0]) + abs(start[1]-goal[1]),0,start)]
+        g_value = {start: 0}
+        while min_heap:
+            f, g, current = heappop(min_heap)
+            if current == goal:
+                return g
+            for dx, dy in [(1,0), (-1,0), (0,1), (0,-1)]:
+                next_x, next_y = current[0] + dx, current[1] + dy
+                if 0 <= next_x < self.rows and 0 <= next_y < self.cols and not self.grid[next_x][next_y]['obstacle']:
+                    tentative = g + 1
+                    neighbor = (next_x, next_y)
+                    if tentative < g_value.get(neighbor, float('inf')):
+                        g_value[neighbor] = tentative
+                        h = abs(next_x-goal[0]) + abs(next_y - goal[1])
+                        heappush(min_heap, (tentative+h, tentative, neighbor))
+        return float('inf')
+
+    def compute_G_rewards(self) -> None:
+        """
+        G(s, g, t)
+        """
+        prev_pos = self.start_pos
+        for row in range(self.rows):
+            for col in range(self.cols):
+                if (row, col) == self.start_pos:
+                    continue
+                if self.grid[row][col]['obstacle']:
+                    self.grid[row][col]['reward'] = self.R_OBS
+                elif (row, col) == self.goal_pos:
+                    self.grid[row][col]['reward'] = self.R_TAR
+                else:
+                    new_pos = (row, col)
+
+                    l_prev = self.astar_distance(prev_pos, self.goal_pos)
+                    l_new = self.astar_distance(new_pos, self.goal_pos)
+                    r_opt = l_prev - l_new
+                    r_rat = math.exp(-l_new/ max(self.l0, 1e-6))
+                    eu_prev = math.hypot(prev_pos[0] -self.goal_pos[0], prev_pos[1] - self.goal_pos[1])
+                    eu_new = math.hypot(row - self.goal_pos[0], col - self.goal_pos[1])
+                    r_euq = eu_prev - eu_new
+                    reward = self.base +  (self.ALPHA_OPT * r_opt + self.ALPHA_RAT * r_rat + self.ALPHA_EUQ * r_euq)
+                    self.grid[row][col]['reward'] = reward
 
     def generate_random_map(self, obstacle_prob: float = 0.2,
                             reward_prob: float = 0.1,
@@ -139,7 +203,7 @@ class GridEnvironmentGUI:
         tk.Button(env_frame, text="New Grid", command=self.new_grid_dialog).pack(fill=tk.X)
         tk.Button(env_frame, text="Random Map", command=self.generate_random_map).pack(fill=tk.X)
         tk.Button(env_frame, text="Clear All", command=self.clear_environment).pack(fill=tk.X)
-
+        # tk.Button(env_frame, text="Compute G Rewards", command=self.compute_rewards).pack(fill=tk.X)
         # Bulk edit controls
         bulk_frame = tk.LabelFrame(control_frame, text="Bulk Edit")
         bulk_frame.pack(side=tk.LEFT, padx=5)
@@ -411,7 +475,10 @@ class GridEnvironmentGUI:
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load environment: {str(e)}")
 
-
+    def compute_rewards(self) -> None:
+        """ Compute and display G(s,g,t) rewards over the current grid."""
+        self.env.compute_G_rewards()
+        self.draw_grid()
 def main():
     """Main function to start the application."""
     root = tk.Tk()

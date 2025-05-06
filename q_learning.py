@@ -109,8 +109,8 @@ class QLearning:
 
 if __name__ == "__main__":
 
-    env = GridEnv(render_mode='human', map_file='map3.json')
-    q_learner = QLearning(env, training_episodes=30, epsilon=0.8)
+    env = GridEnv(render_mode='human', map_file='map2.json')
+    q_learner = QLearning(env, training_episodes=100, epsilon=1)
     q_learner.train()
 
     # Visualize and evaluate using the modified Q-table representation
